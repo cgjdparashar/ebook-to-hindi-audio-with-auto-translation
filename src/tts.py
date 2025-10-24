@@ -5,6 +5,7 @@ Converts Hindi text to audio using gTTS
 from gtts import gTTS
 import os
 import hashlib
+from io import BytesIO
 
 
 class TTSEngine:
@@ -13,6 +14,7 @@ class TTSEngine:
     def __init__(self, cache_dir='cache'):
         self.cache_dir = cache_dir
         os.makedirs(cache_dir, exist_ok=True)
+        self.memory_cache = {}  # In-memory cache for audio data
         print("TTS Engine initialized with gTTS")
     
     def _get_cache_key(self, text):
@@ -32,7 +34,7 @@ class TTSEngine:
             page_num: Optional page number for naming
             
         Returns:
-            Path to generated audio file
+            Path to generated audio file (for backward compatibility)
         """
         if not text or not text.strip():
             raise ValueError("Text cannot be empty")
@@ -41,8 +43,17 @@ class TTSEngine:
         cache_key = self._get_cache_key(text)
         audio_path = self._get_audio_path(cache_key)
         
+        # Check memory cache first
+        if cache_key in self.memory_cache:
+            print(f"Audio memory cache hit for text (length: {len(text)})")
+            return audio_path
+        
+        # Check disk cache
         if os.path.exists(audio_path):
-            print(f"Audio cache hit for text (length: {len(text)})")
+            print(f"Audio disk cache hit for text (length: {len(text)})")
+            # Load into memory cache
+            with open(audio_path, 'rb') as f:
+                self.memory_cache[cache_key] = f.read()
             return audio_path
         
         # Generate audio
@@ -51,18 +62,58 @@ class TTSEngine:
             
             print(f"Generating audio for text (length: {len(text)})")
             
-            # Use gTTS to generate audio
+            # Use gTTS to generate audio in memory
             tts = gTTS(text=text, lang='hi', slow=False)
-            tts.save(audio_path)
             
-            if os.path.exists(audio_path) and os.path.getsize(audio_path) > 0:
-                print(f"Audio generated successfully: {audio_path} ({os.path.getsize(audio_path)} bytes)")
-                return audio_path
-            else:
-                raise Exception("Audio file was not created or is empty")
+            # Save to memory buffer
+            audio_buffer = BytesIO()
+            tts.write_to_fp(audio_buffer)
+            audio_data = audio_buffer.getvalue()
+            
+            # Store in memory cache
+            self.memory_cache[cache_key] = audio_data
+            
+            # Also save to disk for local development
+            try:
+                with open(audio_path, 'wb') as f:
+                    f.write(audio_data)
+                print(f"Audio saved to disk: {audio_path} ({len(audio_data)} bytes)")
+            except Exception as disk_err:
+                print(f"Warning: Could not save to disk (ephemeral filesystem?): {disk_err}")
+            
+            print(f"Audio generated successfully in memory: {len(audio_data)} bytes")
+            return audio_path
                 
         except Exception as e:
             raise Exception(f"Failed to generate audio: {str(e)}")
+    
+    def get_audio_data(self, text):
+        """
+        Get audio data from memory cache
+        
+        Args:
+            text: Hindi text to get audio for
+            
+        Returns:
+            BytesIO object containing audio data, or None if not found
+        """
+        cache_key = self._get_cache_key(text)
+        
+        if cache_key in self.memory_cache:
+            return BytesIO(self.memory_cache[cache_key])
+        
+        # Try to load from disk if not in memory
+        audio_path = self._get_audio_path(cache_key)
+        if os.path.exists(audio_path):
+            try:
+                with open(audio_path, 'rb') as f:
+                    audio_data = f.read()
+                self.memory_cache[cache_key] = audio_data
+                return BytesIO(audio_data)
+            except Exception as e:
+                print(f"Error loading audio from disk: {e}")
+        
+        return None
     
     def generate_batch(self, texts):
         """

@@ -136,6 +136,27 @@ def get_audio(page_num):
             print(f"[AUDIO] ERROR: Page status is error", flush=True)
             return jsonify({'error': 'Audio not available'}), 404
         
+        # Get translated text to retrieve audio from memory
+        translated_text = page_data.get('translated_text', '')
+        if not translated_text:
+            print(f"[AUDIO] ERROR: No translated text", flush=True)
+            return jsonify({'error': 'No translated text available'}), 404
+        
+        print(f"[AUDIO] Getting audio data from memory...", flush=True)
+        
+        # Try to get audio from memory cache
+        audio_data = current_pipeline.tts.get_audio_data(translated_text)
+        
+        if audio_data:
+            print(f"[AUDIO] Serving audio from memory cache", flush=True)
+            return send_file(
+                audio_data,
+                mimetype='audio/mpeg',
+                as_attachment=False,
+                download_name=f'page_{page_num}.mp3'
+            )
+        
+        # Fallback to disk if memory cache misses (for local dev)
         audio_path = page_data['audio_path']
         print(f"[AUDIO] Audio path: {audio_path}", flush=True)
         
@@ -146,18 +167,12 @@ def get_audio(page_num):
         
         print(f"[AUDIO] File exists: {os.path.exists(audio_path)}", flush=True)
         
-        if not os.path.exists(audio_path):
-            print(f"[AUDIO] ERROR: File not found", flush=True)
-            return jsonify({'error': 'Audio file not found'}), 404
+        if os.path.exists(audio_path):
+            print(f"[AUDIO] Serving audio from disk", flush=True)
+            return send_file(audio_path, mimetype='audio/mpeg')
         
-        # Determine mimetype based on file extension
-        if audio_path.endswith('.wav'):
-            mimetype = 'audio/wav'
-        else:
-            mimetype = 'audio/mpeg'
-        
-        print(f"[AUDIO] Sending file with mimetype: {mimetype}", flush=True)
-        return send_file(audio_path, mimetype=mimetype)
+        print(f"[AUDIO] ERROR: Audio not found in memory or disk", flush=True)
+        return jsonify({'error': 'Audio file not found'}), 404
         
     except Exception as e:
         import traceback
