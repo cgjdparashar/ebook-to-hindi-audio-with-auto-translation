@@ -3,8 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Hinglish Translator">
     <meta name="description" content="Translate large English documents to Hinglish (Roman Hindi)">
     <meta name="theme-color" content="#667eea">
+    
+    <!-- iOS Support -->
+    <meta name="format-detection" content="telephone=no">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.svg') }}">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='icon-192.svg') }}">
+    <link rel="apple-touch-icon" sizes="512x512" href="{{ url_for('static', filename='icon-512.svg') }}">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" sizes="192x192" href="{{ url_for('static', filename='icon-192.svg') }}">
     
     <title>English to Hinglish Translator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -15,6 +32,7 @@
             right: 20px;
             display: flex;
             gap: 10px;
+            z-index: 100;
         }
         
         .nav-link {
@@ -26,11 +44,35 @@
             transition: all 0.3s ease;
             font-size: 14px;
             border: 1px solid rgba(255, 255, 255, 0.2);
+            -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
+            touch-action: manipulation;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .nav-link:hover {
             background: rgba(255, 255, 255, 0.2);
             transform: translateY(-2px);
+        }
+        
+        .nav-link:active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(0);
+        }
+        
+        /* Mobile responsive navigation */
+        @media (max-width: 768px) {
+            .nav-links {
+                top: 10px;
+                right: 10px;
+            }
+            
+            .nav-link {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
         }
         
         .progress-container {
@@ -101,6 +143,11 @@
             cursor: pointer;
             transition: all 0.3s ease;
             display: none;
+            -webkit-tap-highlight-color: rgba(102, 126, 234, 0.3);
+            touch-action: manipulation;
+            min-height: 44px;
+            width: 100%;
+            max-width: 400px;
         }
         
         .download-btn:hover {
@@ -110,6 +157,16 @@
         
         .download-btn:active {
             transform: translateY(0);
+            background: linear-gradient(135deg, #5568d3 0%, #653a8b 100%);
+        }
+        
+        /* Mobile responsive for download button */
+        @media (max-width: 768px) {
+            .download-btn {
+                width: 100%;
+                padding: 12px 20px;
+                font-size: 14px;
+            }
         }
         
         .resume-info {
