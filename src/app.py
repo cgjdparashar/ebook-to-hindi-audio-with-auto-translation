@@ -361,7 +361,7 @@ def hinglish_upload():
     except Exception as e:
         import traceback
         print(f"Hinglish upload error: {traceback.format_exc()}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Failed to upload file. Please try again.'}), 500
 
 
 @app.route('/hinglish/translate', methods=['POST'])
@@ -427,7 +427,7 @@ def hinglish_translate():
     except Exception as e:
         import traceback
         print(f"Hinglish translate error: {traceback.format_exc()}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Failed to start translation. Please try again.'}), 500
 
 
 @app.route('/hinglish/progress/<job_id>', methods=['GET'])
@@ -450,7 +450,9 @@ def hinglish_progress(job_id):
                 }
             })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        print(f"Hinglish progress error: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to retrieve progress. Please try again.'}), 500
 
 
 @app.route('/hinglish/download/<job_id>', methods=['GET'])
@@ -485,7 +487,7 @@ def hinglish_download(job_id):
     except Exception as e:
         import traceback
         print(f"Hinglish download error: {traceback.format_exc()}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Failed to download file. Please try again.'}), 500
 
 
 if __name__ == '__main__':

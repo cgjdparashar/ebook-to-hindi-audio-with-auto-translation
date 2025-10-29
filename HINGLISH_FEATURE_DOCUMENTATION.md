@@ -215,7 +215,7 @@ python test_hinglish_feature.py
 | **Purpose** | Listen to Hindi audiobooks | Download Hindi text |
 | **Output** | MP3 audio files | TXT file |
 | **Display** | Shows translated text + audio player | No display (download only) |
-| **Processing** | Page-by-page with prefetch | Batch processing all pages |
+| **Processing** | Page-by-page with prefetch | Page-by-page with progress tracking |
 | **Resume** | Not needed (on-demand) | Auto-resume on errors |
 | **Navigation** | Previous/Next page buttons | N/A (full file at once) |
 | **Large files** | Works (processes on request) | Optimized (chunked + resume) |

@@ -29,7 +29,7 @@ http://localhost:5000/hinglish
 
 ### Step 4: Download Result
 - Click "Download Hinglish Translation" when complete
-- Receives a .txt file with Hindi translation
+- Receive a .txt file with Hindi translation
 - Filename: `{original_name}_hinglish.txt`
 
 ## Testing
