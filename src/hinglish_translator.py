@@ -89,12 +89,30 @@ class HinglishTranslator:
             romanized = romanized.lower()
             
             # Comprehensive cleanup to match natural Hinglish
+            # ORDER MATTERS! More specific patterns first
             replacements = {
+                # Nasalization patterns (must come before generic replacements)
+                'huu~m': 'hun',    # हूँ -> hun
+                'kahaa~m': 'kahan', # कहाँ -> kahan
+                'hai~': 'hain',    # हैं -> hain
+                'mai~': 'main',    # मैं -> main
+                '~n': 'n',         # nasalized n (after specific patterns)
+                '~m': 'n',         # nasalized m -> n (for Hindi nasalization)
+                
+                # Retroflex and special chars (before other patterns)
+                'hai.m': 'hain',   # हैं -> hain
+                'mai.m': 'main',   # मैं -> main
+                '.n': 'n',         # retroflex n
+                '.t': 't',         # retroflex t
+                '.d': 'd',         # retroflex d
+                '.l': 'l',         # retroflex l
+                '.r': 'r',         # retroflex r
+                '.s': 's',         # retroflex s
+                
                 # Common words
                 'aapa': 'aap',     # आप -> aap
                 'kyaa': 'kya',     # क्या -> kya
                 'kahaa': 'kaha',   # कहा -> kaha
-                'kahaam': 'kahan', # कहाँ -> kahan
                 'jaa ': 'ja ',     # जा -> ja (with space)
                 
                 # Verb forms
@@ -105,21 +123,6 @@ class HinglishTranslator:
                 'liyaa': 'liya',   # लिया -> liya
                 'diyaa': 'diya',   # दिया -> diya
                 'kiyaa': 'kiya',   # किया -> kiya
-                
-                # Nasalization and special chars
-                'huu~n': 'hun',    # हूँ -> hun
-                'huum': 'hun',     # हूँ -> hun (alternate)
-                'kaham': 'kahan',  # कहाँ -> kahan
-                'hai.m': 'hain',   # हैं -> hain
-                'mai.m': 'main',   # मैं -> main
-                '~n': 'n',         # nasalized n
-                '~m': 'm',         # nasalized m
-                '.n': 'n',         # retroflex n
-                '.t': 't',         # retroflex t
-                '.d': 'd',         # retroflex d
-                '.l': 'l',         # retroflex l
-                '.r': 'r',         # retroflex r
-                '.s': 's',         # retroflex s
                 
                 # Common double vowels that should be single in casual Hinglish
                 'thiika': 'thik',  # ठीक -> thik
