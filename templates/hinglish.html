@@ -412,8 +412,72 @@
             }, 2000); // Poll every 2 seconds
         }
         
-        downloadBtn.addEventListener('click', () => {
-            window.location.href = `/hinglish/download/${currentJobId}`;
+        downloadBtn.addEventListener('click', async () => {
+            try {
+                // Disable button during check
+                downloadBtn.disabled = true;
+                downloadBtn.textContent = '⏳ Preparing download...';
+                
+                // First check if the file is ready
+                const checkResponse = await fetch(`/hinglish/progress/${currentJobId}`);
+                const checkData = await checkResponse.json();
+                
+                if (checkData.success && checkData.progress.status === 'completed') {
+                    // File is ready, trigger download
+                    downloadBtn.textContent = '📥 Downloading...';
+                    
+                    try {
+                        // Fetch the file
+                        const downloadResponse = await fetch(`/hinglish/download/${currentJobId}`);
+                        
+                        if (!downloadResponse.ok) {
+                            // Try to parse error message
+                            const errorText = await downloadResponse.text();
+                            let errorMsg = 'Download failed';
+                            try {
+                                const errorJson = JSON.parse(errorText);
+                                errorMsg = errorJson.error || errorMsg;
+                            } catch (e) {
+                                errorMsg = errorText.substring(0, 100);
+                            }
+                            throw new Error(errorMsg);
+                        }
+                        
+                        // Get the blob
+                        const blob = await downloadResponse.blob();
+                        
+                        // Create download link
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `translation_hinglish.txt`;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                        
+                        // Success feedback
+                        statusMessage.textContent = 'File downloaded successfully!';
+                        statusMessage.className = 'status-message success';
+                        
+                    } catch (downloadError) {
+                        throw new Error(`Download failed: ${downloadError.message}`);
+                    }
+                    
+                    // Re-enable button
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = '📥 Download Hinglish Translation';
+                    
+                } else {
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = '📥 Download Hinglish Translation';
+                    showError('Translation not completed yet. Please wait.');
+                }
+            } catch (error) {
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = '📥 Download Hinglish Translation';
+                showError('Failed to download file: ' + error.message);
+            }
         });
         
         function showError(message) {

@@ -461,21 +461,37 @@ def hinglish_download(job_id):
     try:
         with hinglish_jobs_lock:
             if job_id not in hinglish_jobs:
+                print(f"[DOWNLOAD] Job {job_id} not found in jobs")
                 return jsonify({'error': 'Job not found'}), 404
             
             job = hinglish_jobs[job_id]
+            print(f"[DOWNLOAD] Job status: {job['status']}")
             
             if job['status'] != 'completed':
+                print(f"[DOWNLOAD] Job not completed, status: {job['status']}")
                 return jsonify({'error': 'Translation not completed'}), 400
             
             output_file = job.get('output_file')
+            print(f"[DOWNLOAD] Output file: {output_file}")
             
-            if not output_file or not os.path.exists(output_file):
+            if not output_file:
+                print(f"[DOWNLOAD] No output file in job data")
+                return jsonify({'error': 'Output file not found'}), 404
+            
+            if not os.path.exists(output_file):
+                print(f"[DOWNLOAD] Output file does not exist on disk: {output_file}")
                 return jsonify({'error': 'Output file not found'}), 404
             
             # Send file as download
             original_filename = job['filename']
             download_name = f"{os.path.splitext(original_filename)[0]}_hinglish.txt"
+            
+            # Ensure absolute path
+            if not os.path.isabs(output_file):
+                output_file = os.path.abspath(output_file)
+            
+            print(f"[DOWNLOAD] Sending file: {output_file} as {download_name}")
+            print(f"[DOWNLOAD] File size: {os.path.getsize(output_file)} bytes")
             
             return send_file(
                 output_file,

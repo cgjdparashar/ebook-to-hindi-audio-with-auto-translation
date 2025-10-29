@@ -1,0 +1,8 @@
+This is a test file for download functionality.
+It contains multiple paragraphs to test the translation and download feature.
+
+The quick brown fox jumps over the lazy dog.
+This sentence contains every letter of the English alphabet.
+
+Testing is important for software quality.
+We need to ensure the download works correctly.
