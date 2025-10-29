@@ -4,6 +4,8 @@ Translates English text to Hinglish (Roman Hindi) using deep-translator
 Supports chunked processing with resume capability for large files
 """
 from deep_translator import GoogleTranslator
+from indic_transliteration import sanscript
+from indic_transliteration.sanscript import transliterate
 import json
 import os
 import hashlib
@@ -73,66 +75,81 @@ class HinglishTranslator:
     
     def _romanize_hindi(self, hindi_text):
         """
-        Convert Hindi text to Roman script (Hinglish)
-        Uses Google Translate's transliteration feature
+        Convert Hindi Devanagari text to Roman script (Hinglish)
+        Uses indic-transliteration library for accurate transliteration
+        
+        Example: "आप कैसे हो?" -> "aap kaise ho?"
+        Example: "आप क्या कर रहे हो?" -> "aap kya kar rahe ho?"
         """
         try:
-            # Use Google Translate API to get romanization
-            url = "https://translate.googleapis.com/translate_a/single"
-            params = {
-                'client': 'gtx',
-                'sl': 'hi',
-                'tl': 'en',
-                'dt': 'rm',  # romanization
-                'q': hindi_text
+            # Use VELTHUIS scheme which gives better double vowel representation
+            romanized = transliterate(hindi_text, sanscript.DEVANAGARI, sanscript.VELTHUIS)
+            
+            # Convert to lowercase for consistency
+            romanized = romanized.lower()
+            
+            # Comprehensive cleanup to match natural Hinglish
+            replacements = {
+                # Common words
+                'aapa': 'aap',     # आप -> aap
+                'kyaa': 'kya',     # क्या -> kya
+                'kahaa': 'kaha',   # कहा -> kaha
+                'kahaam': 'kahan', # कहाँ -> kahan
+                'jaa ': 'ja ',     # जा -> ja (with space)
+                
+                # Verb forms
+                'rahee': 'rahe',   # रहे -> rahe
+                'rahaa': 'raha',   # रहा -> raha
+                'kara': 'kar',     # कर -> kar (in context like kar rahe)
+                'gayaa': 'gaya',   # गया -> gaya
+                'liyaa': 'liya',   # लिया -> liya
+                'diyaa': 'diya',   # दिया -> diya
+                'kiyaa': 'kiya',   # किया -> kiya
+                
+                # Nasalization and special chars
+                'huu~n': 'hun',    # हूँ -> hun
+                'huum': 'hun',     # हूँ -> hun (alternate)
+                'kaham': 'kahan',  # कहाँ -> kahan
+                'hai.m': 'hain',   # हैं -> hain
+                'mai.m': 'main',   # मैं -> main
+                '~n': 'n',         # nasalized n
+                '~m': 'm',         # nasalized m
+                '.n': 'n',         # retroflex n
+                '.t': 't',         # retroflex t
+                '.d': 'd',         # retroflex d
+                '.l': 'l',         # retroflex l
+                '.r': 'r',         # retroflex r
+                '.s': 's',         # retroflex s
+                
+                # Common double vowels that should be single in casual Hinglish
+                'thiika': 'thik',  # ठीक -> thik
+                'liie': 'liye',    # लिये -> liye
+                'diie': 'diye',    # दिये -> diye
             }
             
-            response = self.session.get(url, params=params, verify=False, timeout=10)
-            response.raise_for_status()
+            for old, new in replacements.items():
+                romanized = romanized.replace(old, new)
             
-            # Parse response - romanization is in a different format
-            result = response.json()
+            # Clean up excessive double/triple vowels
+            # Replace triple vowels with double
+            romanized = romanized.replace('aaa', 'aa')
+            romanized = romanized.replace('iii', 'ii')
+            romanized = romanized.replace('uuu', 'uu')
+            romanized = romanized.replace('eee', 'ee')
+            romanized = romanized.replace('ooo', 'oo')
             
-            # Try to extract romanized text
-            # The structure varies, so we try multiple approaches
-            if isinstance(result, list) and len(result) > 0:
-                if isinstance(result[0], list):
-                    # Extract romanized parts
-                    romanized_parts = []
-                    for item in result[0]:
-                        if isinstance(item, list) and len(item) > 3:
-                            # Romanization is usually at index 3
-                            romanized_parts.append(item[3] if item[3] else item[0])
-                        elif isinstance(item, list) and len(item) > 0:
-                            romanized_parts.append(item[0])
-                    
-                    if romanized_parts:
-                        return ''.join(romanized_parts)
+            # Replace some double vowels with single in specific contexts
+            # (keeping 'aa', 'ee', 'oo' but cleaning up others)
+            romanized = romanized.replace('ii ', 'i ')  # At end of words
+            romanized = romanized.replace('uu ', 'u ')  # At end of words
             
-            # Fallback: Use a simpler romanization approach
-            # Translate from Hindi back to Latin script
-            params_reverse = {
-                'client': 'gtx',
-                'sl': 'hi',
-                'tl': 'en',
-                'dt': 't',
-                'q': hindi_text
-            }
-            
-            response2 = self.session.get(url, params=params_reverse, verify=False, timeout=10)
-            result2 = response2.json()
-            
-            # This gives us English translation, but we want phonetic Roman Hindi
-            # As a workaround, we'll use the Hindi text itself as Hinglish
-            # since it's already in Devanagari, we need proper transliteration
-            
-            # For now, return the Hindi text as-is
-            # In production, you'd use a proper transliteration library
-            return hindi_text
+            print(f"Romanized: '{hindi_text[:50]}...' -> '{romanized[:50]}...'")
+            return romanized
             
         except Exception as e:
             print(f"Romanization error: {e}")
-            # Fallback to Hindi text
+            # If transliteration fails, return the Hindi text as-is
+            # This shouldn't happen with indic-transliteration, but just in case
             return hindi_text
     
     def translate_to_hinglish(self, text, retry_count=3):
@@ -178,11 +195,9 @@ class HinglishTranslator:
                 result = response.json()
                 hindi_text = ''.join([item[0] for item in result[0] if item[0]])
                 
-                # For Hinglish, we want Roman script representation of Hindi
-                # Since Google Translate doesn't directly support "Hinglish",
-                # we'll keep the Hindi text in Devanagari script
-                # A more sophisticated approach would use transliteration
-                hinglish_text = hindi_text
+                # Step 2: Romanize Hindi to Hinglish (Roman script)
+                print(f"Romanizing Hindi to Hinglish...")
+                hinglish_text = self._romanize_hindi(hindi_text)
                 
                 # Cache the result
                 with self.cache_lock:
