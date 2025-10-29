@@ -26,10 +26,38 @@
     
     <title>AI Audiobook Translator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .nav-links {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .nav-link {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <header>
+            <div class="nav-links">
+                <a href="/hinglish" class="nav-link">🌏 Text Translator</a>
+            </div>
             <h1>🎧 AI Audiobook Translator</h1>
             <p class="subtitle">Convert PDF/EPUB/TXT to Hindi Audiobooks</p>
             <button id="bookshelf-btn" class="bookshelf-btn" title="View Bookshelf">📚 My Books</button>

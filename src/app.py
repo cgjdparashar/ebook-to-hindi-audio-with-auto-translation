@@ -11,6 +11,10 @@ from werkzeug.utils import secure_filename
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pipeline import ProcessingPipeline
+from hinglish_translator import HinglishTranslator, ChunkedTranslationProcessor
+from parser import BookParser
+import hashlib
+import threading
 
 
 app = Flask(__name__, 
@@ -21,14 +25,22 @@ app = Flask(__name__,
 # Use /tmp on Render (ephemeral filesystem) or local directories
 UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', '/tmp/books') if os.environ.get('RENDER') else 'books'
 CACHE_FOLDER = os.environ.get('CACHE_FOLDER', '/tmp/cache') if os.environ.get('RENDER') else 'cache'
+OUTPUT_FOLDER = os.environ.get('OUTPUT_FOLDER', '/tmp/output') if os.environ.get('RENDER') else 'output'
 ALLOWED_EXTENSIONS = {'pdf', 'epub', 'txt'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['CACHE_FOLDER'] = CACHE_FOLDER
+app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max
 
-# Global pipeline instance
+# Global pipeline instance (for audiobook feature - Page 1)
 current_pipeline = None
+
+# Global instances for Hinglish translation (Page 2)
+hinglish_translator = None
+hinglish_processor = None
+hinglish_jobs = {}  # Track translation jobs
+hinglish_jobs_lock = threading.Lock()
 
 
 def allowed_file(filename):
@@ -269,10 +281,218 @@ def health_check():
     return jsonify({'status': 'healthy'})
 
 
+# ============================================================================
+# HINGLISH TRANSLATION ROUTES (PAGE 2)
+# Separate page for English to Hinglish translation with chunked processing
+# ============================================================================
+
+@app.route('/hinglish')
+def hinglish_page():
+    """Hinglish translation page"""
+    return render_template('hinglish.html')
+
+
+@app.route('/hinglish/upload', methods=['POST'])
+def hinglish_upload():
+    """Handle file upload for Hinglish translation"""
+    global hinglish_translator, hinglish_processor
+    
+    try:
+        # Check if file is present
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file type. Only PDF, EPUB, and TXT allowed'}), 400
+        
+        # Initialize translator and processor if needed
+        if not hinglish_translator:
+            hinglish_translator = HinglishTranslator(app.config['CACHE_FOLDER'])
+        
+        if not hinglish_processor:
+            hinglish_processor = ChunkedTranslationProcessor(
+                hinglish_translator, 
+                app.config['OUTPUT_FOLDER']
+            )
+        
+        # Save file
+        filename = secure_filename(file.filename)
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        # Create job ID
+        job_id = hashlib.md5(f"{filename}_{os.path.getmtime(filepath)}".encode()).hexdigest()
+        
+        # Parse file to get total pages
+        parser = BookParser(filepath)
+        total_pages = parser.get_total_pages()
+        
+        # Check if there's existing progress
+        progress = hinglish_processor._load_progress(job_id)
+        resume_from = 0
+        if progress:
+            resume_from = progress.get('last_completed_page', -1) + 1
+        
+        # Store job info
+        with hinglish_jobs_lock:
+            hinglish_jobs[job_id] = {
+                'filename': filename,
+                'filepath': filepath,
+                'total_pages': total_pages,
+                'status': 'uploaded',
+                'completed': resume_from,
+                'parser': parser
+            }
+        
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'filename': filename,
+            'total_pages': total_pages,
+            'resume_from': resume_from
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Hinglish upload error: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/hinglish/translate', methods=['POST'])
+def hinglish_translate():
+    """Start Hinglish translation for a job"""
+    global hinglish_processor
+    
+    try:
+        data = request.get_json()
+        job_id = data.get('job_id')
+        
+        if not job_id:
+            return jsonify({'error': 'No job ID provided'}), 400
+        
+        with hinglish_jobs_lock:
+            if job_id not in hinglish_jobs:
+                return jsonify({'error': 'Job not found'}), 404
+            
+            job = hinglish_jobs[job_id]
+            
+            if job['status'] == 'processing':
+                return jsonify({'error': 'Job already in progress'}), 400
+            
+            job['status'] = 'processing'
+        
+        # Start translation in background thread
+        def translation_worker(job_id, parser):
+            def progress_callback(page_num, total, status):
+                with hinglish_jobs_lock:
+                    if job_id in hinglish_jobs:
+                        hinglish_jobs[job_id]['completed'] = page_num
+            
+            try:
+                result = hinglish_processor.process_pages(
+                    parser, 
+                    job_id,
+                    callback=progress_callback
+                )
+                
+                with hinglish_jobs_lock:
+                    if job_id in hinglish_jobs:
+                        hinglish_jobs[job_id]['status'] = result['status']
+                        hinglish_jobs[job_id]['output_file'] = result.get('output_file')
+                        if result['status'] == 'error':
+                            hinglish_jobs[job_id]['error'] = result.get('error')
+                
+            except Exception as e:
+                with hinglish_jobs_lock:
+                    if job_id in hinglish_jobs:
+                        hinglish_jobs[job_id]['status'] = 'error'
+                        hinglish_jobs[job_id]['error'] = str(e)
+        
+        # Start worker thread
+        thread = threading.Thread(
+            target=translation_worker, 
+            args=(job_id, job['parser'])
+        )
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({'success': True, 'message': 'Translation started'})
+        
+    except Exception as e:
+        import traceback
+        print(f"Hinglish translate error: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/hinglish/progress/<job_id>', methods=['GET'])
+def hinglish_progress(job_id):
+    """Get translation progress for a job"""
+    try:
+        with hinglish_jobs_lock:
+            if job_id not in hinglish_jobs:
+                return jsonify({'error': 'Job not found'}), 404
+            
+            job = hinglish_jobs[job_id]
+            
+            return jsonify({
+                'success': True,
+                'progress': {
+                    'total': job['total_pages'],
+                    'completed': job.get('completed', 0),
+                    'status': job['status'],
+                    'error': job.get('error')
+                }
+            })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/hinglish/download/<job_id>', methods=['GET'])
+def hinglish_download(job_id):
+    """Download translated Hinglish file"""
+    try:
+        with hinglish_jobs_lock:
+            if job_id not in hinglish_jobs:
+                return jsonify({'error': 'Job not found'}), 404
+            
+            job = hinglish_jobs[job_id]
+            
+            if job['status'] != 'completed':
+                return jsonify({'error': 'Translation not completed'}), 400
+            
+            output_file = job.get('output_file')
+            
+            if not output_file or not os.path.exists(output_file):
+                return jsonify({'error': 'Output file not found'}), 404
+            
+            # Send file as download
+            original_filename = job['filename']
+            download_name = f"{os.path.splitext(original_filename)[0]}_hinglish.txt"
+            
+            return send_file(
+                output_file,
+                as_attachment=True,
+                download_name=download_name,
+                mimetype='text/plain'
+            )
+            
+    except Exception as e:
+        import traceback
+        print(f"Hinglish download error: {traceback.format_exc()}")
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     # Create necessary directories
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(CACHE_FOLDER, exist_ok=True)
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     
     # Get port from environment variable (Render sets this)
     port = int(os.environ.get('PORT', 5000))

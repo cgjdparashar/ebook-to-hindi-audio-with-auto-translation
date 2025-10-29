@@ -45,6 +45,7 @@ cache/
 *.tmp
 temp/
 tmp/
+output/
 
 # Translation & Audio Cache
 cache/*.json
