@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Audiobook Translator">
+    <meta name="description" content="Convert PDF, EPUB, and TXT files to Hindi audiobooks with real-time translation and text-to-speech">
+    <meta name="theme-color" content="#667eea">
+    
+    <!-- iOS Background Audio Support -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="format-detection" content="telephone=no">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.svg') }}">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='icon-192.svg') }}">
+    <link rel="apple-touch-icon" sizes="512x512" href="{{ url_for('static', filename='icon-512.svg') }}">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" sizes="192x192" href="{{ url_for('static', filename='icon-192.svg') }}">
+    
+    <title>AI Audiobook Translator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎧 AI Audiobook Translator</h1>
+            <p class="subtitle">Convert PDF/EPUB/TXT to Hindi Audiobooks</p>
+            <button id="bookshelf-btn" class="bookshelf-btn" title="View Bookshelf">📚 My Books</button>
+        </header>
+
+        <!-- Bookshelf Modal -->
+        <div id="bookshelf-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>📚 My Bookshelf</h2>
+                    <button id="close-modal" class="close-btn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div id="books-list" class="books-list">
+                        <p class="loading-text">Loading books...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Section -->
+        <div id="upload-section" class="section">
+            <div class="upload-area" id="upload-area">
+                <div class="upload-icon">📚</div>
+                <h2>Drop your book here</h2>
+                <p>or click to browse</p>
+                <p class="file-types">Supported: PDF, EPUB, TXT</p>
+                <input type="file" id="file-input" accept=".pdf,.epub,.txt" hidden>
+            </div>
+            <div id="upload-status" class="upload-status hidden"></div>
+        </div>
+
+        <!-- Player Section -->
+        <div id="player-section" class="section hidden">
+            <div class="player-container">
+                <div class="book-info">
+                    <h2 id="book-title">Loading...</h2>
+                    <p id="page-info">Page <span id="current-page">1</span> of <span id="total-pages">-</span></p>
+                </div>
+
+                <div class="audio-player">
+                    <audio id="audio-element" preload="auto" 
+                           x-webkit-airplay="allow" 
+                           webkit-playsinline="true" 
+                           playsinline="true"></audio>
+                    
+                    <div class="progress-container">
+                        <div class="progress-bar">
+                            <div id="progress-fill" class="progress-fill"></div>
+                        </div>
+                        <div class="time-info">
+                            <span id="current-time">0:00</span>
+                            <span id="total-time">0:00</span>
+                        </div>
+                    </div>
+
+                    <div class="controls">
+                        <button id="prev-btn" class="control-btn" title="Previous Page">⏮️</button>
+                        <button id="play-pause-btn" class="control-btn play-btn" title="Play">▶️</button>
+                        <button id="next-btn" class="control-btn" title="Next Page">⏭️</button>
+                        <div class="volume-control">
+                            <span class="volume-icon">🔊</span>
+                            <input type="range" id="volume-slider" min="0" max="100" value="90" class="volume-slider">
+                        </div>
+                        <div class="speed-control">
+                            <span class="speed-icon">⚡</span>
+                            <input type="range" id="speed-slider" min="50" max="200" value="100" step="10" class="speed-slider">
+                            <span id="speed-value" class="speed-value">1.0x</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-display">
+                    <h3>Translated Text (Hindi)</h3>
+                    <div id="translated-text" class="text-content">
+                        Translation will appear here...
+                    </div>
+                </div>
+
+                <div id="processing-status" class="processing-status hidden">
+                    <span class="spinner"></span>
+                    <span id="processing-message">Processing next page...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Display -->
+        <div id="error-display" class="error-display hidden"></div>
+    </div>
+ 
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

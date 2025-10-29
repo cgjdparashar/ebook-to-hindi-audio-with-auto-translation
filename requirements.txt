@@ -1,0 +1,8 @@
+Flask==3.0.0
+PyPDF2==3.0.1
+ebooklib==0.18
+deep-translator==1.11.4
+gTTS==2.5.4
+Werkzeug==3.0.1
+beautifulsoup4==4.12.2
+gunicorn==21.2.0
