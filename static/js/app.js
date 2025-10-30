@@ -51,6 +51,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     setupEventListeners();
     
+    // Initialize playback speed - default to 0.8x
+    const savedSpeed = localStorage.getItem('playbackSpeed');
+    const initialSpeed = savedSpeed ? parseFloat(savedSpeed) : 0.8;
+    speedSlider.value = initialSpeed * 100;
+    speedValue.textContent = initialSpeed.toFixed(1) + 'x';
+    audioElement.playbackRate = initialSpeed;
+    
     // Register Service Worker for PWA
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/static/sw.js')
@@ -203,6 +210,8 @@ function setupEventListeners() {
         const speed = e.target.value / 100;
         audioElement.playbackRate = speed;
         speedValue.textContent = speed.toFixed(1) + 'x';
+        // Save speed to localStorage for persistence
+        localStorage.setItem('playbackSpeed', speed);
     });
     
     // Audio events
@@ -300,6 +309,11 @@ async function loadPage(pageNum) {
             // Load audio
             audioElement.src = data.audio_url;
             audioElement.load();
+            
+            // Restore playback speed after loading new audio
+            const savedSpeed = localStorage.getItem('playbackSpeed');
+            const currentSpeed = savedSpeed ? parseFloat(savedSpeed) : 0.8;
+            audioElement.playbackRate = currentSpeed;
             
             // Wait for DOM to update and audio metadata to load before auto-play
             // This ensures users see the text before hearing audio

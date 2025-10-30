@@ -324,10 +324,19 @@ def hinglish_upload():
         filename = secure_filename(file.filename)
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Calculate file content hash BEFORE saving to detect if it's truly a new file
+        file.seek(0)
+        file_content = file.read()
+        content_hash = hashlib.md5(file_content).hexdigest()
+        file.seek(0)  # Reset for saving
+        
+        # Save the file
         file.save(filepath)
         
-        # Create job ID
-        job_id = hashlib.md5(f"{filename}_{os.path.getmtime(filepath)}".encode()).hexdigest()
+        # Create job ID based on filename AND content hash
+        # This ensures different content = different job, even with same filename
+        job_id = hashlib.md5(f"{filename}_{content_hash}".encode()).hexdigest()
         
         # Parse file to get total pages
         parser = BookParser(filepath)
