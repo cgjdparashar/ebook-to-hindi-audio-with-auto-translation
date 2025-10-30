@@ -332,6 +332,12 @@ class ChunkedTranslationProcessor:
             with open(output_file, mode, encoding='utf-8') as f:
                 for page_num in range(start_page, total_pages):
                     try:
+                        # Call callback BEFORE processing to show we're working on this page
+                        if callback:
+                            callback(page_num, total_pages, 'processing')
+                        
+                        print(f"Processing page {page_num + 1}/{total_pages}...")
+                        
                         # Extract page text
                         text = parser.extract_page(page_num)
                         
@@ -355,7 +361,7 @@ class ChunkedTranslationProcessor:
                         }
                         self._save_progress(job_id, progress_data)
                         
-                        # Call callback if provided
+                        # Call callback AFTER completion with updated count
                         if callback:
                             callback(page_num + 1, total_pages, 'completed')
                         
