@@ -1,9 +1,0 @@
-This is VERSION TWO of the same filename.
-Different content should generate different job ID.
-Testing the fix for Bug 1.
-The system should NOT return cached results from the first file.
-
-Chapter 1: A Different Story
-This time Brida's story takes a completely different path.
-The content is unique and should be translated fresh.
-No resume, no cache from previous file with same name.

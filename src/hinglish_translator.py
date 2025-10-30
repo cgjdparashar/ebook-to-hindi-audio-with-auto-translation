@@ -15,6 +15,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.poolmanager import PoolManager
 import threading
+import re
 
 # Disable SSL verification warnings
 import urllib3
@@ -82,49 +83,39 @@ class HinglishTranslator:
         Example: "आप क्या कर रहे हो?" -> "aap kya kar rahe ho?"
         """
         try:
-            # Use VELTHUIS scheme which gives better double vowel representation
-            romanized = transliterate(hindi_text, sanscript.DEVANAGARI, sanscript.VELTHUIS)
+            # Use ITRANS scheme which produces clean Roman output without diacritics
+            romanized = transliterate(hindi_text, sanscript.DEVANAGARI, sanscript.ITRANS)
             
             # Convert to lowercase for consistency
             romanized = romanized.lower()
             
             # Comprehensive cleanup to match natural Hinglish
             # ORDER MATTERS! More specific patterns first
+            
+            # First, remove ALL special characters from ITRANS
+            # ITRANS uses: . (dot), ~ (tilde), ^ (caret), " (quotes), | (pipe)
+            import re
+            romanized = re.sub(r'[.~^"|]', '', romanized)  # Remove all special chars
+            
             replacements = {
-                # Nasalization patterns (must come before generic replacements)
-                'huu~m': 'hun',    # हूँ -> hun
-                'kahaa~m': 'kahan', # कहाँ -> kahan
-                'hai~': 'hain',    # हैं -> hain
-                'mai~': 'main',    # मैं -> main
-                '~n': 'n',         # nasalized n (after specific patterns)
-                '~m': 'n',         # nasalized m -> n (for Hindi nasalization)
-                
-                # Retroflex and special chars (before other patterns)
-                'hai.m': 'hain',   # हैं -> hain
-                'mai.m': 'main',   # मैं -> main
-                '.n': 'n',         # retroflex n
-                '.t': 't',         # retroflex t
-                '.d': 'd',         # retroflex d
-                '.l': 'l',         # retroflex l
-                '.r': 'r',         # retroflex r
-                '.s': 's',         # retroflex s
-                
-                # Common words
+                # Common words with double vowels -> single
                 'aapa': 'aap',     # आप -> aap
                 'kyaa': 'kya',     # क्या -> kya
                 'kahaa': 'kaha',   # कहा -> kaha
                 'jaa ': 'ja ',     # जा -> ja (with space)
+                'hain': 'hain',    # हैं -> hain
+                'main': 'main',    # मैं -> main
                 
                 # Verb forms
                 'rahee': 'rahe',   # रहे -> rahe
                 'rahaa': 'raha',   # रहा -> raha
-                'kara': 'kar',     # कर -> kar (in context like kar rahe)
+                'kara': 'kar',     # कर -> kar
                 'gayaa': 'gaya',   # गया -> gaya
                 'liyaa': 'liya',   # लिया -> liya
                 'diyaa': 'diya',   # दिया -> diya
                 'kiyaa': 'kiya',   # किया -> kiya
                 
-                # Common double vowels that should be single in casual Hinglish
+                # Common double vowels that should be single
                 'thiika': 'thik',  # ठीक -> thik
                 'liie': 'liye',    # लिये -> liye
                 'diie': 'diye',    # दिये -> diye
@@ -134,17 +125,27 @@ class HinglishTranslator:
                 romanized = romanized.replace(old, new)
             
             # Clean up excessive double/triple vowels
-            # Replace triple vowels with double
             romanized = romanized.replace('aaa', 'aa')
             romanized = romanized.replace('iii', 'ii')
             romanized = romanized.replace('uuu', 'uu')
             romanized = romanized.replace('eee', 'ee')
             romanized = romanized.replace('ooo', 'oo')
             
-            # Replace some double vowels with single in specific contexts
-            # (keeping 'aa', 'ee', 'oo' but cleaning up others)
-            romanized = romanized.replace('ii ', 'i ')  # At end of words
-            romanized = romanized.replace('uu ', 'u ')  # At end of words
+            # Clean up double vowels at word boundaries
+            romanized = romanized.replace('ii ', 'i ')
+            romanized = romanized.replace('uu ', 'u ')
+            
+            # Fix common ITRANS issues for natural Hinglish
+            # Word endings: remove trailing 'a' for common words
+            romanized = re.sub(r'\bapa\b', 'aap', romanized)     # आप
+            romanized = re.sub(r'\byaha\b', 'yeh', romanized)     # यह
+            romanized = re.sub(r'\beka\b', 'ek', romanized)       # एक
+            romanized = re.sub(r'\bmaim\b', 'main', romanized)    # मैं
+            romanized = re.sub(r'\bhaim\b', 'hain', romanized)    # हैं
+            
+            # Common word endings
+            romanized = re.sub(r'aba\b', 'ab', romanized)         # किताब -> kitab
+            romanized = re.sub(r'ula\b', 'ul', romanized)         # स्कूल -> school
             
             print(f"Romanized: '{hindi_text[:50]}...' -> '{romanized[:50]}...'")
             return romanized
@@ -152,7 +153,6 @@ class HinglishTranslator:
         except Exception as e:
             print(f"Romanization error: {e}")
             # If transliteration fails, return the Hindi text as-is
-            # This shouldn't happen with indic-transliteration, but just in case
             return hindi_text
     
     def translate_to_hinglish(self, text, retry_count=3):
@@ -324,6 +324,15 @@ class ChunkedTranslationProcessor:
         if progress:
             start_page = progress.get('last_completed_page', -1) + 1
             print(f"Resuming from page {start_page + 1}/{total_pages}")
+            
+            # If already completed all pages, return completed status immediately
+            if start_page >= total_pages:
+                print(f"Translation already completed for job {job_id}")
+                return {
+                    'status': 'completed',
+                    'output_file': output_file,
+                    'total_pages': total_pages
+                }
         
         # Open output file in append mode if resuming, write mode otherwise
         mode = 'a' if start_page > 0 else 'w'

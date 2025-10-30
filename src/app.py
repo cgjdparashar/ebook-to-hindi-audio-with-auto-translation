@@ -362,6 +362,31 @@ def hinglish_upload():
             if progress:
                 resume_from = progress.get('last_completed_page', -1) + 1
                 print(f"[UPLOAD] Found existing progress, resuming from page {resume_from}")
+                
+                # If already completed, set status to completed immediately
+                if resume_from >= total_pages:
+                    print(f"[UPLOAD] Translation already completed for job {job_id}")
+                    with hinglish_jobs_lock:
+                        hinglish_jobs[job_id] = {
+                            'filename': filename,
+                            'original_filename': filename,
+                            'filepath': filepath,
+                            'total_pages': total_pages,
+                            'status': 'completed',
+                            'completed': total_pages,
+                            'parser': parser,
+                            'content_hash': content_hash,
+                            'output_file': os.path.join(app.config['OUTPUT_FOLDER'], f"{job_id}_hinglish.txt")
+                        }
+                    return jsonify({
+                        'success': True,
+                        'job_id': job_id,
+                        'filename': filename,
+                        'total_pages': total_pages,
+                        'resume_from': total_pages,
+                        'has_progress': True,
+                        'already_completed': True
+                    })
         
         # Store job info with original filename for proper download naming
         with hinglish_jobs_lock:

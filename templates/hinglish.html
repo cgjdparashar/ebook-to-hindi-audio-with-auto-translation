@@ -382,17 +382,30 @@
                 
                 if (data.success) {
                     currentJobId = data.job_id;
-                    statusMessage.textContent = `File uploaded! Total pages: ${data.total_pages}. Starting translation...`;
                     
-                    // Check if resume is needed
-                    if (data.has_progress && data.resume_from > 0) {
-                        resumeInfo.textContent = `Found previous progress. Resuming from page ${data.resume_from + 1} of ${data.total_pages}`;
-                        resumeInfo.style.display = 'block';
+                    // Check if already completed
+                    if (data.already_completed) {
+                        progressFill.style.width = '100%';
+                        progressFill.textContent = '100%';
+                        statusMessage.textContent = 'Translation already completed! Click below to download.';
+                        statusMessage.className = 'status-message success';
+                        downloadBtn.style.display = 'block';
                         restartBtn.style.display = 'inline-block';
+                        resumeInfo.textContent = `This file was previously translated (${data.total_pages} pages)`;
+                        resumeInfo.style.display = 'block';
+                    } else {
+                        statusMessage.textContent = `File uploaded! Total pages: ${data.total_pages}. Starting translation...`;
+                        
+                        // Check if resume is needed
+                        if (data.has_progress && data.resume_from > 0) {
+                            resumeInfo.textContent = `Found previous progress. Resuming from page ${data.resume_from + 1} of ${data.total_pages}`;
+                            resumeInfo.style.display = 'block';
+                            restartBtn.style.display = 'inline-block';
+                        }
+                        
+                        // Start translation
+                        startTranslation();
                     }
-                    
-                    // Start translation
-                    startTranslation();
                 } else {
                     showError(data.error || 'Upload failed');
                 }
@@ -429,27 +442,22 @@
                 try {
                     const response = await fetch(`/hinglish/progress/${currentJobId}`);
                     const data = await response.json();
-                    
                     if (data.success) {
-                        const progress = data.progress;
-                        const percent = Math.round((progress.completed / progress.total) * 100);
-                        
+                        const percent = Math.round((data.completed / data.total) * 100);
                         progressFill.style.width = percent + '%';
                         progressFill.textContent = percent + '%';
-                        
-                        statusMessage.textContent = `Translating page ${progress.completed} of ${progress.total}...`;
+                        statusMessage.textContent = `Translating page ${data.completed} of ${data.total}...`;
                         statusMessage.className = 'status-message processing';
-                        
-                        if (progress.status === 'completed') {
+                        if (data.status === 'completed') {
                             clearInterval(pollInterval);
                             progressFill.style.width = '100%';
                             progressFill.textContent = '100%';
                             statusMessage.textContent = 'Translation completed! Click below to download.';
                             statusMessage.className = 'status-message success';
                             downloadBtn.style.display = 'block';
-                        } else if (progress.status === 'error') {
+                        } else if (data.status === 'error') {
                             clearInterval(pollInterval);
-                            showError(progress.error || 'Translation failed');
+                            showError(data.error || 'Translation failed');
                         }
                     }
                 } catch (error) {
@@ -468,7 +476,7 @@
                 const checkResponse = await fetch(`/hinglish/progress/${currentJobId}`);
                 const checkData = await checkResponse.json();
                 
-                if (checkData.success && checkData.progress.status === 'completed') {
+                if (checkData.success && checkData.status === 'completed') {
                     // File is ready, trigger download
                     downloadBtn.textContent = '📥 Downloading...';
                     
