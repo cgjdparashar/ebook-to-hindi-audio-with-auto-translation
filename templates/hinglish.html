@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Hinglish Translator">
+    <meta name="description" content="Translate large English documents to Hinglish (Roman Hindi)">
+    <meta name="theme-color" content="#667eea">
+    
+    <!-- iOS Support -->
+    <meta name="format-detection" content="telephone=no">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.svg') }}">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ url_for('static', filename='icon-192.svg') }}">
+    <link rel="apple-touch-icon" sizes="512x512" href="{{ url_for('static', filename='icon-512.svg') }}">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" sizes="192x192" href="{{ url_for('static', filename='icon-192.svg') }}">
+    
+    <title>English to Hinglish Translator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .nav-links {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+        
+        .nav-link {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
+            touch-action: manipulation;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .nav-link:active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(0);
+        }
+        
+        /* Mobile responsive navigation */
+        @media (max-width: 768px) {
+            .nav-links {
+                top: 10px;
+                right: 10px;
+            }
+            
+            .nav-link {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+        }
+        
+        .progress-container {
+            margin-top: 20px;
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        .status-message {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            background: #f0f0f0;
+            text-align: center;
+        }
+        
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status-message.processing {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .download-btn {
+            margin-top: 20px;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: none;
+            -webkit-tap-highlight-color: rgba(102, 126, 234, 0.3);
+            touch-action: manipulation;
+            min-height: 44px;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .download-btn:active {
+            transform: translateY(0);
+            background: linear-gradient(135deg, #5568d3 0%, #653a8b 100%);
+        }
+        
+        /* Mobile responsive for download button */
+        @media (max-width: 768px) {
+            .download-btn {
+                width: 100%;
+                padding: 12px 20px;
+                font-size: 14px;
+            }
+        }
+        
+        .resume-info {
+            margin-top: 15px;
+            padding: 12px;
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .restart-btn {
+            margin-top: 20px;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            -webkit-tap-highlight-color: rgba(243, 156, 18, 0.3);
+            touch-action: manipulation;
+            min-height: 44px;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .restart-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.4);
+        }
+        
+        .restart-btn:active {
+            transform: translateY(0);
+            background: linear-gradient(135deg, #d68910 0%, #c0611b 100%);
+        }
+        
+        .info-box {
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .info-box h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        
+        .info-box ul {
+            text-align: left;
+            padding-left: 20px;
+        }
+        
+        .info-box li {
+            margin: 8px 0;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="nav-links">
+                <a href="/" class="nav-link">🎧 Audiobook Translator</a>
+            </div>
+            <h1>🌏 English to Hinglish Translator</h1>
+            <p class="subtitle">Convert large documents to Roman Hindi</p>
+        </header>
+
+        <!-- Upload Section -->
+        <div id="upload-section" class="section">
+            <div class="upload-area" id="upload-area">
+                <div class="upload-icon">📄</div>
+                <h2>Drop your document here</h2>
+                <p>or click to browse</p>
+                <p class="file-types">Supported: PDF, EPUB, TXT (up to 5000+ pages)</p>
+                <input type="file" id="file-input" accept=".pdf,.epub,.txt" hidden>
+            </div>
+            <div id="upload-status" class="upload-status hidden"></div>
+        </div>
+
+        <!-- Processing Section -->
+        <div id="processing-section" class="section hidden">
+            <div class="progress-container">
+                <h2 id="file-name">Processing...</h2>
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill">0%</div>
+                </div>
+                <div id="status-message" class="status-message">
+                    Initializing translation...
+                </div>
+                <div id="resume-info" class="resume-info">
+                    Previous translation found. Resuming from where we left off...
+                </div>
+                <div id="button-container" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button id="download-btn" class="download-btn">
+                        📥 Download Translation
+                    </button>
+                    <button id="restart-btn" class="restart-btn" style="display: none;">
+                        🔄 Start from Scratch
+                    </button>
+                </div>
+            </div>
+            
+            <div class="info-box">
+                <h3>ℹ️ About Hinglish Translation</h3>
+                <ul>
+                    <li>Translates English to Hindi (Devanagari script)</li>
+                    <li>Handles large files with automatic chunking</li>
+                    <li>Auto-resumes if connection is lost</li>
+                    <li>Progress is saved continuously</li>
+                    <li>Download will be available as .txt file</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Error Display -->
+        <div id="error-display" class="error-display hidden"></div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const uploadSection = document.getElementById('upload-section');
+        const processingSection = document.getElementById('processing-section');
+        const progressFill = document.getElementById('progress-fill');
+        const statusMessage = document.getElementById('status-message');
+        const resumeInfo = document.getElementById('resume-info');
+        const downloadBtn = document.getElementById('download-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const fileName = document.getElementById('file-name');
+        const errorDisplay = document.getElementById('error-display');
+        
+        let currentJobId = null;
+        let currentFilename = null;
+        let pollInterval = null;
+        let forceRestart = false;
+
+        // Upload area interactions
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#667eea';
+            uploadArea.style.background = 'rgba(102, 126, 234, 0.05)';
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+            uploadArea.style.background = 'rgba(255, 255, 255, 0.05)';
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+            uploadArea.style.background = 'rgba(255, 255, 255, 0.05)';
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFileUpload(files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileUpload(e.target.files[0]);
+            }
+        });
+        
+        async function handleFileUpload(file) {
+            // Validate file type
+            const validTypes = ['application/pdf', 'application/epub+zip', 'text/plain'];
+            const validExtensions = ['.pdf', '.epub', '.txt'];
+            const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!validExtensions.includes(fileExtension)) {
+                showError('Invalid file type. Please upload PDF, EPUB, or TXT file.');
+                return;
+            }
+            
+            // Store filename for later
+            currentFilename = file.name;
+            
+            // Show processing section
+            uploadSection.classList.add('hidden');
+            processingSection.classList.remove('hidden');
+            fileName.textContent = file.name;
+            statusMessage.textContent = 'Uploading file...';
+            statusMessage.className = 'status-message processing';
+            resumeInfo.style.display = 'none';
+            restartBtn.style.display = 'none';
+            
+            // Upload file
+            const formData = new FormData();
+            formData.append('file', file);
+            if (forceRestart) {
+                formData.append('force_restart', 'true');
+                forceRestart = false; // Reset flag
+            }
+            
+            try {
+                const response = await fetch('/hinglish/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentJobId = data.job_id;
+                    
+                    // Check if already completed
+                    if (data.already_completed) {
+                        progressFill.style.width = '100%';
+                        progressFill.textContent = '100%';
+                        statusMessage.textContent = 'Translation already completed! Click below to download.';
+                        statusMessage.className = 'status-message success';
+                        downloadBtn.style.display = 'block';
+                        restartBtn.style.display = 'inline-block';
+                        resumeInfo.textContent = `This file was previously translated (${data.total_pages} pages)`;
+                        resumeInfo.style.display = 'block';
+                    } else {
+                        statusMessage.textContent = `File uploaded! Total pages: ${data.total_pages}. Starting translation...`;
+                        
+                        // Check if resume is needed
+                        if (data.has_progress && data.resume_from > 0) {
+                            resumeInfo.textContent = `Found previous progress. Resuming from page ${data.resume_from + 1} of ${data.total_pages}`;
+                            resumeInfo.style.display = 'block';
+                            restartBtn.style.display = 'inline-block';
+                        }
+                        
+                        // Start translation
+                        startTranslation();
+                    }
+                } else {
+                    showError(data.error || 'Upload failed');
+                }
+            } catch (error) {
+                showError('Upload failed: ' + error.message);
+            }
+        }
+        
+        async function startTranslation() {
+            try {
+                const response = await fetch('/hinglish/translate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ job_id: currentJobId })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Start polling for progress
+                    pollProgress();
+                } else {
+                    showError(data.error || 'Translation failed to start');
+                }
+            } catch (error) {
+                showError('Failed to start translation: ' + error.message);
+            }
+        }
+        
+        async function pollProgress() {
+            pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/hinglish/progress/${currentJobId}`);
+                    const data = await response.json();
+                    if (data.success) {
+                        const percent = Math.round((data.completed / data.total) * 100);
+                        progressFill.style.width = percent + '%';
+                        progressFill.textContent = percent + '%';
+                        statusMessage.textContent = `Translating page ${data.completed} of ${data.total}...`;
+                        statusMessage.className = 'status-message processing';
+                        if (data.status === 'completed') {
+                            clearInterval(pollInterval);
+                            progressFill.style.width = '100%';
+                            progressFill.textContent = '100%';
+                            statusMessage.textContent = 'Translation completed! Click below to download.';
+                            statusMessage.className = 'status-message success';
+                            downloadBtn.style.display = 'block';
+                        } else if (data.status === 'error') {
+                            clearInterval(pollInterval);
+                            showError(data.error || 'Translation failed');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Progress poll error:', error);
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+        
+        downloadBtn.addEventListener('click', async () => {
+            try {
+                // Disable button during check
+                downloadBtn.disabled = true;
+                downloadBtn.textContent = '⏳ Preparing download...';
+                
+                // First check if the file is ready
+                const checkResponse = await fetch(`/hinglish/progress/${currentJobId}`);
+                const checkData = await checkResponse.json();
+                
+                if (checkData.success && checkData.status === 'completed') {
+                    // File is ready, trigger download
+                    downloadBtn.textContent = '📥 Downloading...';
+                    
+                    try {
+                        // Fetch the file
+                        const downloadResponse = await fetch(`/hinglish/download/${currentJobId}`);
+                        
+                        if (!downloadResponse.ok) {
+                            // Try to parse error message
+                            const errorText = await downloadResponse.text();
+                            let errorMsg = 'Download failed';
+                            try {
+                                const errorJson = JSON.parse(errorText);
+                                errorMsg = errorJson.error || errorMsg;
+                            } catch (e) {
+                                errorMsg = errorText.substring(0, 100);
+                            }
+                            throw new Error(errorMsg);
+                        }
+                        
+                        // Get the blob
+                        const blob = await downloadResponse.blob();
+                        
+                        // Create download link with original filename
+                        const baseName = currentFilename.replace(/\.[^/.]+$/, '');
+                        const downloadFilename = `${baseName}.txt`;
+                        
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = downloadFilename;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                        
+                        // Success feedback
+                        statusMessage.textContent = 'File downloaded successfully!';
+                        statusMessage.className = 'status-message success';
+                        
+                    } catch (downloadError) {
+                        throw new Error(`Download failed: ${downloadError.message}`);
+                    }
+                    
+                    // Re-enable button
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = '📥 Download Hinglish Translation';
+                    
+                } else {
+                    downloadBtn.disabled = false;
+                    downloadBtn.textContent = '📥 Download Hinglish Translation';
+                    showError('Translation not completed yet. Please wait.');
+                }
+            } catch (error) {
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = '📥 Download Hinglish Translation';
+                showError('Failed to download file: ' + error.message);
+            }
+        });
+        
+        // Restart button handler
+        restartBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to start from scratch? This will delete all previous progress.')) {
+                forceRestart = true;
+                
+                // Stop current polling
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+                
+                // Reset UI
+                uploadSection.classList.remove('hidden');
+                processingSection.classList.add('hidden');
+                downloadBtn.style.display = 'none';
+                restartBtn.style.display = 'none';
+                resumeInfo.style.display = 'none';
+                progressFill.style.width = '0%';
+                progressFill.textContent = '0%';
+                
+                statusMessage.textContent = 'Ready to upload a new file';
+                statusMessage.className = 'status-message';
+                
+                // Reset current job
+                currentJobId = null;
+            }
+        });
+        
+        function showError(message) {
+            errorDisplay.textContent = '❌ ' + message;
+            errorDisplay.classList.remove('hidden');
+            
+            statusMessage.textContent = message;
+            statusMessage.className = 'status-message error';
+            
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+        }
+        
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -11,6 +11,10 @@ from werkzeug.utils import secure_filename
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from pipeline import ProcessingPipeline
+from hinglish_translator import HinglishTranslator, ChunkedTranslationProcessor
+from parser import BookParser
+import hashlib
+import threading
 
 
 app = Flask(__name__, 
@@ -21,14 +25,22 @@ app = Flask(__name__,
 # Use /tmp on Render (ephemeral filesystem) or local directories
 UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', '/tmp/books') if os.environ.get('RENDER') else 'books'
 CACHE_FOLDER = os.environ.get('CACHE_FOLDER', '/tmp/cache') if os.environ.get('RENDER') else 'cache'
+OUTPUT_FOLDER = os.environ.get('OUTPUT_FOLDER', '/tmp/output') if os.environ.get('RENDER') else 'output'
 ALLOWED_EXTENSIONS = {'pdf', 'epub', 'txt'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['CACHE_FOLDER'] = CACHE_FOLDER
+app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max
 
-# Global pipeline instance
+# Global pipeline instance (for audiobook feature - Page 1)
 current_pipeline = None
+
+# Global instances for Hinglish translation (Page 2)
+hinglish_translator = None
+hinglish_processor = None
+hinglish_jobs = {}  # Track translation jobs
+hinglish_jobs_lock = threading.Lock()
 
 
 def allowed_file(filename):
@@ -269,10 +281,293 @@ def health_check():
     return jsonify({'status': 'healthy'})
 
 
+# ============================================================================
+# HINGLISH TRANSLATION ROUTES (PAGE 2)
+# Separate page for English to Hinglish translation with chunked processing
+# ============================================================================
+
+@app.route('/hinglish')
+def hinglish_page():
+    """Hinglish translation page"""
+    return render_template('hinglish.html')
+
+
+@app.route('/hinglish/upload', methods=['POST'])
+def hinglish_upload():
+    """Handle file upload for Hinglish translation"""
+    global hinglish_translator, hinglish_processor
+    
+    try:
+        # Check if file is present
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Invalid file type. Only PDF, EPUB, and TXT allowed'}), 400
+        
+        # Check for "force_restart" flag
+        force_restart = request.form.get('force_restart', 'false').lower() == 'true'
+        
+        # Initialize translator and processor if needed
+        if not hinglish_translator:
+            hinglish_translator = HinglishTranslator(app.config['CACHE_FOLDER'])
+        
+        if not hinglish_processor:
+            hinglish_processor = ChunkedTranslationProcessor(
+                hinglish_translator, 
+                app.config['OUTPUT_FOLDER']
+            )
+        
+        # Save file
+        filename = secure_filename(file.filename)
+        os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Calculate file content hash BEFORE saving to detect if it's truly a new file
+        file.seek(0)
+        file_content = file.read()
+        content_hash = hashlib.md5(file_content).hexdigest()
+        file.seek(0)  # Reset for saving
+        
+        # Save the file
+        file.save(filepath)
+        
+        # Create job ID based on filename AND content hash
+        # This ensures different content = different job, even with same filename
+        job_id = hashlib.md5(f"{filename}_{content_hash}".encode()).hexdigest()
+        
+        # Parse file to get total pages
+        parser = BookParser(filepath)
+        total_pages = parser.get_total_pages()
+        
+        # Check if there's existing progress (unless force_restart is requested)
+        progress = None
+        resume_from = 0
+        
+        if force_restart:
+            # Delete existing progress and output files
+            print(f"[UPLOAD] Force restart requested for job {job_id}")
+            hinglish_processor._delete_progress(job_id)
+            output_file = os.path.join(app.config['OUTPUT_FOLDER'], f"{job_id}_hinglish.txt")
+            if os.path.exists(output_file):
+                os.remove(output_file)
+                print(f"[UPLOAD] Deleted existing output file: {output_file}")
+        else:
+            progress = hinglish_processor._load_progress(job_id)
+            if progress:
+                resume_from = progress.get('last_completed_page', -1) + 1
+                print(f"[UPLOAD] Found existing progress, resuming from page {resume_from}")
+                
+                # If already completed, set status to completed immediately
+                if resume_from >= total_pages:
+                    print(f"[UPLOAD] Translation already completed for job {job_id}")
+                    with hinglish_jobs_lock:
+                        hinglish_jobs[job_id] = {
+                            'filename': filename,
+                            'original_filename': filename,
+                            'filepath': filepath,
+                            'total_pages': total_pages,
+                            'status': 'completed',
+                            'completed': total_pages,
+                            'parser': parser,
+                            'content_hash': content_hash,
+                            'output_file': os.path.join(app.config['OUTPUT_FOLDER'], f"{job_id}_hinglish.txt")
+                        }
+                    return jsonify({
+                        'success': True,
+                        'job_id': job_id,
+                        'filename': filename,
+                        'total_pages': total_pages,
+                        'resume_from': total_pages,
+                        'has_progress': True,
+                        'already_completed': True
+                    })
+        
+        # Store job info with original filename for proper download naming
+        with hinglish_jobs_lock:
+            hinglish_jobs[job_id] = {
+                'filename': filename,
+                'original_filename': filename,  # Store for download
+                'filepath': filepath,
+                'total_pages': total_pages,
+                'status': 'uploaded',
+                'completed': resume_from,
+                'parser': parser,
+                'content_hash': content_hash  # Store for verification
+            }
+        
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'filename': filename,
+            'total_pages': total_pages,
+            'resume_from': resume_from,
+            'has_progress': resume_from > 0
+        })
+        
+    except Exception as e:
+        import traceback
+        print(f"Hinglish upload error: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to upload file. Please try again.'}), 500
+
+
+@app.route('/hinglish/translate', methods=['POST'])
+def hinglish_translate():
+    """Start Hinglish translation for a job"""
+    global hinglish_processor
+    
+    try:
+        # Handle malformed JSON
+        data = request.get_json(force=False, silent=True)
+        if data is None:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+        
+        job_id = data.get('job_id')
+        
+        if not job_id:
+            return jsonify({'error': 'No job ID provided'}), 400
+        
+        with hinglish_jobs_lock:
+            if job_id not in hinglish_jobs:
+                return jsonify({'error': 'Job not found'}), 404
+            
+            job = hinglish_jobs[job_id]
+            
+            if job['status'] == 'processing':
+                return jsonify({'error': 'Job already in progress'}), 400
+            
+            job['status'] = 'processing'
+        
+        # Start translation in background thread
+        def translation_worker(job_id, parser):
+            def progress_callback(page_num, total, status):
+                with hinglish_jobs_lock:
+                    if job_id in hinglish_jobs:
+                        hinglish_jobs[job_id]['completed'] = page_num
+            
+            try:
+                result = hinglish_processor.process_pages(
+                    parser, 
+                    job_id,
+                    callback=progress_callback
+                )
+                
+                with hinglish_jobs_lock:
+                    if job_id in hinglish_jobs:
+                        hinglish_jobs[job_id]['status'] = result['status']
+                        hinglish_jobs[job_id]['output_file'] = result.get('output_file')
+                        if result['status'] == 'error':
+                            hinglish_jobs[job_id]['error'] = result.get('error')
+                
+            except Exception as e:
+                with hinglish_jobs_lock:
+                    if job_id in hinglish_jobs:
+                        hinglish_jobs[job_id]['status'] = 'error'
+                        hinglish_jobs[job_id]['error'] = str(e)
+        
+        # Start worker thread
+        thread = threading.Thread(
+            target=translation_worker, 
+            args=(job_id, job['parser'])
+        )
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({'success': True, 'message': 'Translation started'})
+        
+    except Exception as e:
+        import traceback
+        print(f"Hinglish translate error: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to start translation. Please try again.'}), 500
+
+
+@app.route('/hinglish/progress/<job_id>', methods=['GET'])
+def hinglish_progress(job_id):
+    """Get translation progress for a job"""
+    try:
+        with hinglish_jobs_lock:
+            if job_id not in hinglish_jobs:
+                return jsonify({'error': 'Job not found'}), 404
+            
+            job = hinglish_jobs[job_id]
+            
+            # Return flat structure with required fields
+            return jsonify({
+                'success': True,
+                'completed': job.get('completed', 0),
+                'total': job['total_pages'],
+                'status': job['status'],
+                'error': job.get('error')
+            })
+    except Exception as e:
+        import traceback
+        print(f"Hinglish progress error: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to retrieve progress. Please try again.'}), 500
+
+
+@app.route('/hinglish/download/<job_id>', methods=['GET'])
+def hinglish_download(job_id):
+    """Download translated Hinglish file"""
+    try:
+        with hinglish_jobs_lock:
+            if job_id not in hinglish_jobs:
+                print(f"[DOWNLOAD] Job {job_id} not found in jobs")
+                return jsonify({'error': 'Job not found'}), 404
+            
+            job = hinglish_jobs[job_id]
+            print(f"[DOWNLOAD] Job status: {job['status']}")
+            
+            if job['status'] != 'completed':
+                print(f"[DOWNLOAD] Job not completed, status: {job['status']}")
+                return jsonify({'error': 'Translation not completed'}), 400
+            
+            output_file = job.get('output_file')
+            print(f"[DOWNLOAD] Output file: {output_file}")
+            
+            if not output_file:
+                print(f"[DOWNLOAD] No output file in job data")
+                return jsonify({'error': 'Output file not found'}), 404
+            
+            if not os.path.exists(output_file):
+                print(f"[DOWNLOAD] Output file does not exist on disk: {output_file}")
+                return jsonify({'error': 'Output file not found'}), 404
+            
+            # Send file as download with SAME name as uploaded file (but .txt extension)
+            original_filename = job.get('original_filename', job['filename'])
+            # Keep same basename, just change extension to .txt
+            base_name = os.path.splitext(original_filename)[0]
+            download_name = f"{base_name}.txt"
+            
+            # Ensure absolute path
+            if not os.path.isabs(output_file):
+                output_file = os.path.abspath(output_file)
+            
+            print(f"[DOWNLOAD] Sending file: {output_file} as {download_name}")
+            print(f"[DOWNLOAD] File size: {os.path.getsize(output_file)} bytes")
+            
+            return send_file(
+                output_file,
+                as_attachment=True,
+                download_name=download_name,
+                mimetype='text/plain'
+            )
+            
+    except Exception as e:
+        import traceback
+        print(f"Hinglish download error: {traceback.format_exc()}")
+        return jsonify({'error': 'Failed to download file. Please try again.'}), 500
+
+
 if __name__ == '__main__':
     # Create necessary directories
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(CACHE_FOLDER, exist_ok=True)
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     
     # Get port from environment variable (Render sets this)
     port = int(os.environ.get('PORT', 5000))

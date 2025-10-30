@@ -6,3 +6,4 @@ gTTS==2.5.4
 Werkzeug==3.0.1
 beautifulsoup4==4.12.2
 gunicorn==21.2.0
+indic-transliteration==2.3.51

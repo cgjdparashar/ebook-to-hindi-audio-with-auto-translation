@@ -26,10 +26,63 @@
     
     <title>AI Audiobook Translator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .nav-links {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+        
+        .nav-link {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
+            touch-action: manipulation;
+            min-height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .nav-link:active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(0);
+        }
+        
+        /* Mobile responsive navigation */
+        @media (max-width: 768px) {
+            .nav-links {
+                top: 10px;
+                right: 10px;
+            }
+            
+            .nav-link {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <header>
+            <div class="nav-links">
+                <a href="/hinglish" class="nav-link">🌏 Text Translator</a>
+            </div>
             <h1>🎧 AI Audiobook Translator</h1>
             <p class="subtitle">Convert PDF/EPUB/TXT to Hindi Audiobooks</p>
             <button id="bookshelf-btn" class="bookshelf-btn" title="View Bookshelf">📚 My Books</button>
