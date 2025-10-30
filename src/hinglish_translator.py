@@ -296,6 +296,13 @@ class ChunkedTranslationProcessor:
                 return json.load(f)
         return None
     
+    def _delete_progress(self, job_id):
+        """Delete progress file for a job"""
+        progress_file = self._get_progress_file(job_id)
+        if os.path.exists(progress_file):
+            os.remove(progress_file)
+            print(f"Deleted progress file: {progress_file}")
+    
     def process_pages(self, parser, job_id, start_page=0, callback=None):
         """
         Process all pages with progress tracking and resume capability

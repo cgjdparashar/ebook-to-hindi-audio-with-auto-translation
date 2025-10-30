@@ -179,6 +179,34 @@
             display: none;
         }
         
+        .restart-btn {
+            margin-top: 20px;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            -webkit-tap-highlight-color: rgba(243, 156, 18, 0.3);
+            touch-action: manipulation;
+            min-height: 44px;
+            width: 100%;
+            max-width: 400px;
+        }
+        
+        .restart-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.4);
+        }
+        
+        .restart-btn:active {
+            transform: translateY(0);
+            background: linear-gradient(135deg, #d68910 0%, #c0611b 100%);
+        }
+        
         .info-box {
             margin-top: 20px;
             padding: 20px;
@@ -238,9 +266,14 @@
                 <div id="resume-info" class="resume-info">
                     Previous translation found. Resuming from where we left off...
                 </div>
-                <button id="download-btn" class="download-btn">
-                    📥 Download Hinglish Translation
-                </button>
+                <div id="button-container" style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                    <button id="download-btn" class="download-btn">
+                        📥 Download Translation
+                    </button>
+                    <button id="restart-btn" class="restart-btn" style="display: none;">
+                        🔄 Start from Scratch
+                    </button>
+                </div>
             </div>
             
             <div class="info-box">
@@ -268,11 +301,14 @@
         const statusMessage = document.getElementById('status-message');
         const resumeInfo = document.getElementById('resume-info');
         const downloadBtn = document.getElementById('download-btn');
+        const restartBtn = document.getElementById('restart-btn');
         const fileName = document.getElementById('file-name');
         const errorDisplay = document.getElementById('error-display');
         
         let currentJobId = null;
+        let currentFilename = null;
         let pollInterval = null;
+        let forceRestart = false;
 
         // Upload area interactions
         uploadArea.addEventListener('click', () => fileInput.click());
@@ -316,16 +352,25 @@
                 return;
             }
             
+            // Store filename for later
+            currentFilename = file.name;
+            
             // Show processing section
             uploadSection.classList.add('hidden');
             processingSection.classList.remove('hidden');
             fileName.textContent = file.name;
             statusMessage.textContent = 'Uploading file...';
             statusMessage.className = 'status-message processing';
+            resumeInfo.style.display = 'none';
+            restartBtn.style.display = 'none';
             
             // Upload file
             const formData = new FormData();
             formData.append('file', file);
+            if (forceRestart) {
+                formData.append('force_restart', 'true');
+                forceRestart = false; // Reset flag
+            }
             
             try {
                 const response = await fetch('/hinglish/upload', {
@@ -340,9 +385,10 @@
                     statusMessage.textContent = `File uploaded! Total pages: ${data.total_pages}. Starting translation...`;
                     
                     // Check if resume is needed
-                    if (data.resume_from > 0) {
-                        resumeInfo.textContent = `Resuming from page ${data.resume_from + 1} of ${data.total_pages}`;
+                    if (data.has_progress && data.resume_from > 0) {
+                        resumeInfo.textContent = `Found previous progress. Resuming from page ${data.resume_from + 1} of ${data.total_pages}`;
                         resumeInfo.style.display = 'block';
+                        restartBtn.style.display = 'inline-block';
                     }
                     
                     // Start translation
@@ -446,11 +492,14 @@
                         // Get the blob
                         const blob = await downloadResponse.blob();
                         
-                        // Create download link
+                        // Create download link with original filename
+                        const baseName = currentFilename.replace(/\.[^/.]+$/, '');
+                        const downloadFilename = `${baseName}.txt`;
+                        
                         const url = window.URL.createObjectURL(blob);
                         const a = document.createElement('a');
                         a.href = url;
-                        a.download = `translation_hinglish.txt`;
+                        a.download = downloadFilename;
                         document.body.appendChild(a);
                         a.click();
                         window.URL.revokeObjectURL(url);
@@ -477,6 +526,34 @@
                 downloadBtn.disabled = false;
                 downloadBtn.textContent = '📥 Download Hinglish Translation';
                 showError('Failed to download file: ' + error.message);
+            }
+        });
+        
+        // Restart button handler
+        restartBtn.addEventListener('click', () => {
+            if (confirm('Are you sure you want to start from scratch? This will delete all previous progress.')) {
+                forceRestart = true;
+                
+                // Stop current polling
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+                
+                // Reset UI
+                uploadSection.classList.remove('hidden');
+                processingSection.classList.add('hidden');
+                downloadBtn.style.display = 'none';
+                restartBtn.style.display = 'none';
+                resumeInfo.style.display = 'none';
+                progressFill.style.width = '0%';
+                progressFill.textContent = '0%';
+                
+                statusMessage.textContent = 'Ready to upload a new file';
+                statusMessage.className = 'status-message';
+                
+                // Reset current job
+                currentJobId = null;
             }
         });
         

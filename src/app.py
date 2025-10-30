@@ -310,6 +310,9 @@ def hinglish_upload():
         if not allowed_file(file.filename):
             return jsonify({'error': 'Invalid file type. Only PDF, EPUB, and TXT allowed'}), 400
         
+        # Check for "force_restart" flag
+        force_restart = request.form.get('force_restart', 'false').lower() == 'true'
+        
         # Initialize translator and processor if needed
         if not hinglish_translator:
             hinglish_translator = HinglishTranslator(app.config['CACHE_FOLDER'])
@@ -342,21 +345,35 @@ def hinglish_upload():
         parser = BookParser(filepath)
         total_pages = parser.get_total_pages()
         
-        # Check if there's existing progress
-        progress = hinglish_processor._load_progress(job_id)
+        # Check if there's existing progress (unless force_restart is requested)
+        progress = None
         resume_from = 0
-        if progress:
-            resume_from = progress.get('last_completed_page', -1) + 1
         
-        # Store job info
+        if force_restart:
+            # Delete existing progress and output files
+            print(f"[UPLOAD] Force restart requested for job {job_id}")
+            hinglish_processor._delete_progress(job_id)
+            output_file = os.path.join(app.config['OUTPUT_FOLDER'], f"{job_id}_hinglish.txt")
+            if os.path.exists(output_file):
+                os.remove(output_file)
+                print(f"[UPLOAD] Deleted existing output file: {output_file}")
+        else:
+            progress = hinglish_processor._load_progress(job_id)
+            if progress:
+                resume_from = progress.get('last_completed_page', -1) + 1
+                print(f"[UPLOAD] Found existing progress, resuming from page {resume_from}")
+        
+        # Store job info with original filename for proper download naming
         with hinglish_jobs_lock:
             hinglish_jobs[job_id] = {
                 'filename': filename,
+                'original_filename': filename,  # Store for download
                 'filepath': filepath,
                 'total_pages': total_pages,
                 'status': 'uploaded',
                 'completed': resume_from,
-                'parser': parser
+                'parser': parser,
+                'content_hash': content_hash  # Store for verification
             }
         
         return jsonify({
@@ -364,7 +381,8 @@ def hinglish_upload():
             'job_id': job_id,
             'filename': filename,
             'total_pages': total_pages,
-            'resume_from': resume_from
+            'resume_from': resume_from,
+            'has_progress': resume_from > 0
         })
         
     except Exception as e:
@@ -494,9 +512,11 @@ def hinglish_download(job_id):
                 print(f"[DOWNLOAD] Output file does not exist on disk: {output_file}")
                 return jsonify({'error': 'Output file not found'}), 404
             
-            # Send file as download
-            original_filename = job['filename']
-            download_name = f"{os.path.splitext(original_filename)[0]}_hinglish.txt"
+            # Send file as download with SAME name as uploaded file (but .txt extension)
+            original_filename = job.get('original_filename', job['filename'])
+            # Keep same basename, just change extension to .txt
+            base_name = os.path.splitext(original_filename)[0]
+            download_name = f"{base_name}.txt"
             
             # Ensure absolute path
             if not os.path.isabs(output_file):
