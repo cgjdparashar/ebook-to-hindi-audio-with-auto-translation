@@ -1,5 +1,0 @@
-How are you?
-What are you doing?
-I am fine.
-Where are you going?
-This is a test file for Hinglish translation.
