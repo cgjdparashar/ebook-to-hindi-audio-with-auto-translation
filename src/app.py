@@ -379,7 +379,11 @@ def hinglish_translate():
     global hinglish_processor
     
     try:
-        data = request.get_json()
+        # Handle malformed JSON
+        data = request.get_json(force=False, silent=True)
+        if data is None:
+            return jsonify({'error': 'Invalid JSON data'}), 400
+        
         job_id = data.get('job_id')
         
         if not job_id:
@@ -449,14 +453,13 @@ def hinglish_progress(job_id):
             
             job = hinglish_jobs[job_id]
             
+            # Return flat structure with required fields
             return jsonify({
                 'success': True,
-                'progress': {
-                    'total': job['total_pages'],
-                    'completed': job.get('completed', 0),
-                    'status': job['status'],
-                    'error': job.get('error')
-                }
+                'completed': job.get('completed', 0),
+                'total': job['total_pages'],
+                'status': job['status'],
+                'error': job.get('error')
             })
     except Exception as e:
         import traceback
